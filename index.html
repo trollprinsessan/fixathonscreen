@@ -8,17 +8,19 @@
   /* ABC Areal: uses the installed font if the screen's computer has it,
      or fonts/ABCAreal-Medium.woff2 + fonts/ABCAreal-MediumItalic.woff2 next to this file
      (only if your licence covers web use). Otherwise falls back to Helvetica Neue / Arial. */
+  /* ABC Areal from the fonts folder: woff2 first, ttf for browsers without woff2.
+     ?v= busts any old cached copy; bump it when the font files change. */
   @font-face {
     font-family: "Areal";
-    src: local("ABC Areal Medium"), local("ABCAreal-Medium"),
-         url("fonts/ABCAreal-Medium.woff2") format("woff2");
-    font-weight: 500; font-style: normal;
+    src: url("fonts/ABCAreal-Medium.woff2?v=3") format("woff2"),
+         url("fonts/ABCAreal-Medium.ttf?v=3") format("truetype");
+    font-weight: 500; font-style: normal; font-display: block;
   }
   @font-face {
     font-family: "Areal";
-    src: local("ABC Areal Medium Italic"), local("ABCAreal-MediumItalic"),
-         url("fonts/ABCAreal-MediumItalic.woff2") format("woff2");
-    font-weight: 500; font-style: italic;
+    src: url("fonts/ABCAreal-MediumItalic.woff2?v=3") format("woff2"),
+         url("fonts/ABCAreal-MediumItalic.ttf?v=3") format("truetype");
+    font-weight: 500; font-style: italic; font-display: block;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -127,14 +129,14 @@ const SAFE_BOTTOM = 48;
    Compare quickly with ?bottom=text or ?bottom=gif in the address. */
 let BOTTOM = 'text';
 
-/* Marquee copy, one sentence per entry, alternating black and white like Climax. */
+/* Marquee copy, one sentence per entry. Set an entry to white to change its colour. */
 const MARQUEE = [
   ['We need bigger prompts.', 'black'],
-  ['AI is the most powerful tool humanity has ever held.', 'white'],
+  ['AI is the most powerful tool humanity has ever held.', 'black'],
   ['The question is what we choose to do with it.', 'black'],
-  ['We’re calling on a new generation of problem engineers.', 'white'],
+  ['We’re calling on a new generation of problem engineers.', 'black'],
   ['Founders who will use this divine intelligence to tackle what matters: our climate, our health, our food systems, our future.', 'black'],
-  ['Let’s prompt what matters.', 'white']
+  ['Let’s prompt what matters.', 'black']
 ];
 const MARQUEE_PX_PER_S = 75;   // Climax's speed, scaled to this size
 
@@ -324,7 +326,14 @@ function applyBottom() {
   document.getElementById('row').style.top = ((1080 - SAFE_BOTTOM - (gif ? 210 : 48)) / 2) + 'px';
 }
 applyBottom();
-(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { if (BOTTOM === 'text') buildMarquee(); go(start, true); });
+// Load both Areal styles before anything is measured or typed (gives up after 4 s)
+const fontsReady = document.fonts
+  ? Promise.race([
+      Promise.all([document.fonts.load('500 42px Areal'), document.fonts.load('italic 500 42px Areal')]),
+      new Promise(r => setTimeout(r, 4000))
+    ]).catch(() => {})
+  : Promise.resolve();
+fontsReady.then(() => { if (BOTTOM === 'text') buildMarquee(); go(start, true); });
 </script>
 </body>
 </html>
