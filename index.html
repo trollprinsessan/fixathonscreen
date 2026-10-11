@@ -40,11 +40,11 @@
   /* Label + text, vertically centred. Label sits on the text's first baseline,
      so it travels when the text block changes height. */
   .row {
-    position: absolute; left: 220px; top: 516px;   /* FIXATHON at x = 220; top = centre above the marquee */
+    position: absolute; left: 320px; top: 492px;   /* FIXATHON at x = 320; top = centre above the marquee */
     transform: translateY(-50%);
     display: flex; align-items: baseline;
   }
-  .left { width: 624px; }     /* text column starts at x = 844 */
+  .left { width: 524px; }     /* text column starts at x = 844 */
   .label {
     font-size: 48px; line-height: 54px; letter-spacing: -0.4px;
     text-transform: uppercase;
@@ -119,6 +119,10 @@ const STATES = [
 ];
 
 /* Marquee phrases: [text, colour]. Two spaces between, like Climax. */
+/* Distance from the bottom of the screen to the marquee. TVs often crop the
+   edges of the picture (overscan), so it sits a little above the edge. */
+const SAFE_BOTTOM = 48;
+
 /* Bottom edge: 'gif' = fixers.gif strip, 'text' = the marquee below.
    Compare quickly with ?bottom=text or ?bottom=gif in the address. */
 let BOTTOM = 'text';
@@ -313,9 +317,11 @@ function applyBottom() {
   const strip = document.getElementById('strip');
   if (gif) strip.src = 'fixers.gif';   // only loaded when the GIF strip is used
   strip.style.display = gif ? 'block' : 'none';
-  document.getElementById('marquee').style.display = gif ? 'none' : 'block';
+  const marquee = document.getElementById('marquee');
+  marquee.style.display = gif ? 'none' : 'block';
+  strip.style.bottom = marquee.style.bottom = SAFE_BOTTOM + 'px';
   // centre the text block in the space above whichever strip is showing
-  document.getElementById('row').style.top = ((1080 - (gif ? 210 : 48)) / 2) + 'px';
+  document.getElementById('row').style.top = ((1080 - SAFE_BOTTOM - (gif ? 210 : 48)) / 2) + 'px';
 }
 applyBottom();
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { if (BOTTOM === 'text') buildMarquee(); go(start, true); });
