@@ -49,31 +49,32 @@
     display: flex; align-items: baseline;
   }
   .left { width: 524px; }     /* text column starts at x = 844 */
+  /* Type sizes: label 44/50, text and marquee 38/44 (was 48/54 and 42/48) */
   .label {
-    font-size: 48px; line-height: 54px; letter-spacing: -0.4px;
+    font-size: 44px; line-height: 50px; letter-spacing: -0.4px;
     text-transform: uppercase;
   }
   /* Marquee, as on climaxbooks.com: body size, steady linear scroll.
      Each sentence is its own small element moved by the script, so weak TV
      browsers never have to handle one huge strip. */
   .marquee {
-    position: absolute; left: 0; bottom: 0; width: 1920px; height: 48px;
+    position: absolute; left: 0; bottom: 0; width: 1920px; height: 44px;
     padding: 0; overflow: hidden; white-space: nowrap;
-    font-size: 42px; line-height: 48px; letter-spacing: -0.4px;
+    font-size: 38px; line-height: 44px; letter-spacing: -0.4px;
   }
   .strip { position: absolute; left: 0; bottom: 0; width: 1920px; height: 210px; display: none; }
-  .track { position: relative; height: 48px; }
+  .track { position: relative; height: 44px; }
   .mq { position: absolute; left: 0; top: 0; white-space: pre; will-change: transform; }
   .text {
     position: relative;
     width: 727px;
-    font-size: 42px; line-height: 48px; letter-spacing: -0.4px;
+    font-size: 38px; line-height: 44px; letter-spacing: -0.4px;
   }
   .row1 { display: block; }
   .wd { visibility: hidden; }
   .wd.on { visibility: visible; }
   .cursor { position: absolute; width: 4px; background: #000; display: none; }
-  .text p { margin-bottom: 48px; }
+  .text p { margin-bottom: 44px; }
   .text p:last-of-type { margin-bottom: 0; }   /* last paragraph: no empty line under it */
   .nb { white-space: nowrap; }
 </style>
@@ -101,7 +102,7 @@ const STATES = [
     hold: 15000,
     typed: 2,   // type the first two lines (the question too), then reveal the rest
     text: [
-      '<span class="nb">50 fixers. 24 hours. One question:</span><br><i>Can AI help turn climate commitments into action?</i>',
+      '<span class="nb">50 fixers. 24 hours. One question:</span><br><i>Can AI help turn climate commitments <span class="nb">into action?</span></i>',
       'This is the <i>Fixathon</i>, Norrsken’s version of a hackathon.',
       '<span class="nb">50 multidisciplinary</span> <span class="nb">problem-solvers</span> from across Europe are building solutions with AI, data, and open tools to help get climate action back on track ahead of <i>COP31</i>.',
       'Come in, say hi!'
@@ -117,6 +118,7 @@ const STATES = [
   },
   {
     hold: 6000,
+    lockup: true,   // FIXATHON and the line meet in the centre of the screen
     text: ['prompt what matters.']
   }
 ];
@@ -126,6 +128,11 @@ const STATES = [
    edges of the picture (overscan), so it sits a little above the edge. */
 const SAFE_BOTTOM = 32;
 
+/* FIXATHON's x position on the normal grid; the text column starts 524px further right.
+   States with lockup: true centre FIXATHON + text together instead, LOCKUP_GAP apart. */
+const GRID_LEFT = 320;
+const LOCKUP_GAP = 60;
+
 /* Vertical centre of the FIXATHON + text block on the 1080px-tall screen.
    Higher number = lower on screen. */
 const BLOCK_CENTRE_Y = 520;
@@ -133,7 +140,7 @@ const BLOCK_CENTRE_Y = 520;
 /* Version of this page. The screen checks version.txt every minute and reloads
    itself when it changes, so updates reach it without anyone touching it.
    Change BUILD and version.txt together. */
-const BUILD = '2026-10-12b';
+const BUILD = '2026-10-12c';
 
 /* Bottom edge: 'gif' = fixers.gif strip, 'text' = the marquee below.
    Compare quickly with ?bottom=text or ?bottom=gif in the address. */
@@ -153,7 +160,8 @@ const MARQUEE_PX_PER_S = 75;   // Climax's speed, scaled to this size
 /* Motion: text steps out, label travels, first line is typed word by word
    with a cursor, then the rest steps in line by line. No fades. */
 const OUT_LINE_MS = 18;     // per line, bottom up
-const TRAVEL_MS = 480;      // label move
+const TRAVEL_MS = 480;      // label move, up or down
+const SLIDE_MS = 360;       // label move, sideways into or out of the centred sign-off
 const BLINKS = 2;           // cursor blinks before typing starts
 const BLINK_MS = 260;
 const WORD_MS = 150;        // per word
@@ -164,6 +172,7 @@ const TRAVEL_EASE = 'cubic-bezier(.7, 0, .25, 1)';
 
 /* --------------------------------------------------------------- */
 const stage = document.getElementById('stage');
+const row = document.getElementById('row');
 const label = document.getElementById('left');   // FIXATHON travels with the text
 const textEl = document.getElementById('text');
 let scale = 1;
@@ -175,7 +184,7 @@ function fit() {
 window.addEventListener('resize', fit);
 fit();
 
-const LH = 48;
+const LH = 44;
 const lines = () => Math.max(1, Math.round(textEl.offsetHeight / LH));
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
@@ -245,6 +254,32 @@ async function revealRest(restH) {
   await a.finished;
 }
 
+/* Horizontal placement: the grid, or the centred lockup for the sign-off */
+function inkWidth(el) {   // width of the words themselves, not their boxes
+  let x0 = Infinity, x1 = -Infinity, n;
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  while ((n = w.nextNode())) {
+    const r = document.createRange();
+    r.selectNodeContents(n);
+    for (const b of r.getClientRects()) {
+      if (!b.width) continue;
+      x0 = Math.min(x0, b.left); x1 = Math.max(x1, b.right);
+    }
+  }
+  return x1 > x0 ? (x1 - x0) / scale : 0;
+}
+function placeRow(st) {
+  if (st.lockup) {
+    const lw = inkWidth(label.querySelector('.label'));
+    const tw = inkWidth(textEl.querySelector('p'));
+    label.style.width = (lw + LOCKUP_GAP) + 'px';
+    row.style.left = Math.round(960 - (lw + LOCKUP_GAP + tw) / 2) + 'px';
+  } else {
+    label.style.width = '';
+    row.style.left = GRID_LEFT + 'px';
+  }
+}
+
 let index = 0, timer = null, paused = false, run = 0;
 
 async function show(i, first) {
@@ -255,18 +290,29 @@ async function show(i, first) {
   if (me !== run) return;
 
   // swap content while hidden, then let the label travel to the new first line
-  const before = label.getBoundingClientRect().top;
+  const before = label.getBoundingClientRect();
   textEl.getAnimations().forEach(a => a.cancel());
   const restH = render(STATES[i]);
   textEl.style.clipPath = `inset(0 0 ${restH}px 0)`;   // only the (still empty) first line is open
-  const after = label.getBoundingClientRect().top;
-  const dy = (before - after) / scale;
+  placeRow(STATES[i]);
+  const after = label.getBoundingClientRect();
+  const dx = (before.left - after.left) / scale;
+  const dy = (before.top - after.top) / scale;
 
-  if (!first && Math.abs(dy) > 0.5) {
-    await label.animate(
-      [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
-      { duration: TRAVEL_MS, easing: TRAVEL_EASE }
-    ).finished;
+  // Into the sign-off: down, then slide in. Out of it: slide back, then up. Never diagonal.
+  if (!first && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
+    const T = (x, y) => ({ transform: `translate(${x}px, ${y}px)`, easing: TRAVEL_EASE });
+    let frames, dur;
+    if (Math.abs(dx) <= 0.5) { frames = [T(0, dy), T(0, 0)]; dur = TRAVEL_MS; }
+    else if (Math.abs(dy) <= 0.5) { frames = [T(dx, 0), T(0, 0)]; dur = SLIDE_MS; }
+    else {
+      dur = TRAVEL_MS + SLIDE_MS;
+      const into = STATES[i].lockup;
+      const mid = into ? T(dx, 0) : T(0, dy);
+      mid.offset = (into ? TRAVEL_MS : SLIDE_MS) / dur;
+      frames = [T(dx, dy), mid, T(0, 0)];
+    }
+    await label.animate(frames, { duration: dur }).finished;
   }
   if (me !== run) return;
 
