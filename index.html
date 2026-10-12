@@ -61,7 +61,6 @@
   .strip { position: absolute; left: 0; bottom: 0; width: 1920px; height: 210px; display: none; }
   .track { display: inline-flex; will-change: transform; }
   .track span { white-space: pre; }
-  .track .w { color: #fff; }
   @keyframes scrollX { from { transform: translateX(0); } to { transform: translateX(var(--shift)); } }
   .text {
     position: relative;
@@ -124,6 +123,14 @@ const STATES = [
 /* Distance from the bottom of the screen to the marquee. TVs often crop the
    edges of the picture (overscan), so it sits a little above the edge. */
 const SAFE_BOTTOM = 48;
+
+/* Lift the text block above its centred position (px). */
+const TEXT_LIFT = 40;
+
+/* Version of this page. The screen checks version.txt every minute and reloads
+   itself when it changes, so updates reach it without anyone touching it.
+   Change BUILD and version.txt together. */
+const BUILD = '2026-10-12a';
 
 /* Bottom edge: 'gif' = fixers.gif strip, 'text' = the marquee below.
    Compare quickly with ?bottom=text or ?bottom=gif in the address. */
@@ -323,9 +330,22 @@ function applyBottom() {
   marquee.style.display = gif ? 'none' : 'block';
   strip.style.bottom = marquee.style.bottom = SAFE_BOTTOM + 'px';
   // centre the text block in the space above whichever strip is showing
-  document.getElementById('row').style.top = ((1080 - SAFE_BOTTOM - (gif ? 210 : 48)) / 2) + 'px';
+  document.getElementById('row').style.top = ((1080 - SAFE_BOTTOM - (gif ? 210 : 48)) / 2 - TEXT_LIFT) + 'px';
 }
 applyBottom();
+
+// Self-update: reload when a newer version is published (skipped when opened as a local file)
+if (location.protocol.startsWith('http')) {
+  setInterval(() => {
+    fetch('version.txt?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.ok ? r.text() : null)
+      .then(v => {
+        v = v && v.trim();
+        if (v && v !== BUILD) location.replace(location.pathname + '?v=' + encodeURIComponent(v));
+      })
+      .catch(() => {});
+  }, 60000);
+}
 // Load both Areal styles before anything is measured or typed (gives up after 4 s)
 const fontsReady = document.fonts
   ? Promise.race([
