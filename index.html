@@ -4,10 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fixathon</title>
+<link rel="preload" href="fonts/ABCAreal-Medium.woff2?v=3" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/ABCAreal-MediumItalic.woff2?v=3" as="font" type="font/woff2" crossorigin>
 <style>
-  /* ABC Areal: uses the installed font if the screen's computer has it,
-     or fonts/ABCAreal-Medium.woff2 + fonts/ABCAreal-MediumItalic.woff2 next to this file
-     (only if your licence covers web use). Otherwise falls back to Helvetica Neue / Arial. */
   /* ABC Areal from the fonts folder: woff2 first, ttf for browsers without woff2.
      ?v= busts any old cached copy; bump it when the font files change. */
   @font-face {
@@ -24,7 +23,10 @@
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #FF78C8; }
+  /* Background pink. Deeper than Climax's #FF78C8 because the screen washes colour out.
+     Try other values on the screen itself with ?bg=FF1F7A in the address. */
+  :root { --bg: #FF2E93; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
   body {
     color: #000;
     font-family: "Areal", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -42,7 +44,7 @@
   /* Label + text, vertically centred. Label sits on the text's first baseline,
      so it travels when the text block changes height. */
   .row {
-    position: absolute; left: 320px; top: 492px;   /* FIXATHON at x = 320; top = centre above the marquee */
+    position: absolute; left: 320px; top: 520px;   /* FIXATHON at x = 320; top = vertical centre of the block (set in the script) */
     transform: translateY(-50%);
     display: flex; align-items: baseline;
   }
@@ -51,17 +53,17 @@
     font-size: 48px; line-height: 54px; letter-spacing: -0.4px;
     text-transform: uppercase;
   }
-  /* Marquee, as on climaxbooks.com: body size, one line of air above and below,
-     linear scroll, phrases alternating black and white */
+  /* Marquee, as on climaxbooks.com: body size, steady linear scroll.
+     Each sentence is its own small element moved by the script, so weak TV
+     browsers never have to handle one huge strip. */
   .marquee {
-    position: absolute; left: 0; bottom: 0; width: 1920px;
+    position: absolute; left: 0; bottom: 0; width: 1920px; height: 48px;
     padding: 0; overflow: hidden; white-space: nowrap;
     font-size: 42px; line-height: 48px; letter-spacing: -0.4px;
   }
   .strip { position: absolute; left: 0; bottom: 0; width: 1920px; height: 210px; display: none; }
-  .track { display: inline-flex; will-change: transform; }
-  .track span { white-space: pre; }
-  @keyframes scrollX { from { transform: translateX(0); } to { transform: translateX(var(--shift)); } }
+  .track { position: relative; height: 48px; }
+  .mq { position: absolute; left: 0; top: 0; white-space: pre; will-change: transform; }
   .text {
     position: relative;
     width: 727px;
@@ -72,7 +74,7 @@
   .wd.on { visibility: visible; }
   .cursor { position: absolute; width: 4px; background: #000; display: none; }
   .text p { margin-bottom: 48px; }
-  .text p:last-child { margin-bottom: 0; }
+  .text p:last-of-type { margin-bottom: 0; }   /* last paragraph: no empty line under it */
   .nb { white-space: nowrap; }
 </style>
 </head>
@@ -99,7 +101,7 @@ const STATES = [
     hold: 15000,
     typed: 2,   // type the first two lines (the question too), then reveal the rest
     text: [
-      '50 fixers. 24 hours. One question:<br><i>Can AI help turn climate commitments into action?</i>',
+      '<span class="nb">50 fixers. 24 hours. One question:</span><br><i>Can AI help turn climate commitments into action?</i>',
       'This is the <i>Fixathon</i>, Norrsken’s version of a hackathon.',
       '<span class="nb">50 multidisciplinary</span> <span class="nb">problem-solvers</span> from across Europe are building solutions with AI, data, and open tools to help get climate action back on track ahead of <i>COP31</i>.',
       'Come in, say hi!'
@@ -108,7 +110,7 @@ const STATES = [
   {
     hold: 15000,
     text: [
-      'Curious to see what they are building?<br>Whether you build companies, fund them, work in policy, or just care about the planet, come watch the best teams pitch live and cheer on the winners.',
+      '<span class="nb">Curious to see what they are building?</span><br>Whether you build companies, fund them, work in policy, or just care about the planet, come watch the best teams pitch live and cheer on the winners.',
       'Fixathon Demos<br><i class="nb">Climate Solutions Built in 24 Hours</i><br>October 15, 14:10-15:00<br>Agora',
       'Spotlight On<br><i>The Fixathon Winning Team</i><br>October 15, 16:10-16:20<br>Town Hall'
     ]
@@ -122,15 +124,16 @@ const STATES = [
 /* Marquee phrases: [text, colour]. Two spaces between, like Climax. */
 /* Distance from the bottom of the screen to the marquee. TVs often crop the
    edges of the picture (overscan), so it sits a little above the edge. */
-const SAFE_BOTTOM = 48;
+const SAFE_BOTTOM = 32;
 
-/* Lift the text block above its centred position (px). */
-const TEXT_LIFT = 40;
+/* Vertical centre of the FIXATHON + text block on the 1080px-tall screen.
+   Higher number = lower on screen. */
+const BLOCK_CENTRE_Y = 520;
 
 /* Version of this page. The screen checks version.txt every minute and reloads
    itself when it changes, so updates reach it without anyone touching it.
    Change BUILD and version.txt together. */
-const BUILD = '2026-10-12a';
+const BUILD = '2026-10-12b';
 
 /* Bottom edge: 'gif' = fixers.gif strip, 'text' = the marquee below.
    Compare quickly with ?bottom=text or ?bottom=gif in the address. */
@@ -294,30 +297,43 @@ window.addEventListener('keydown', e => {
   }
 });
 
-/* Marquee: one group of phrases, repeated to fill the width, scrolled by one group */
+/* Marquee: each sentence is its own small element, laid end to end and moved
+   left at a steady speed; one that leaves the left edge rejoins at the back. */
+let mq = null;
 function buildMarquee() {
   const track = document.getElementById('track');
-  const group = () => {
-    const g = document.createElement('span');
-    g.style.display = 'inline-flex';
-    g.setAttribute('aria-hidden', 'true');
-    MARQUEE.forEach(([t, c]) => {
-      const s = document.createElement('span');
-      s.textContent = t + '  ';
-      if (c === 'white') s.className = 'w';
-      g.appendChild(s);
-    });
-    return g;
-  };
   track.innerHTML = '';
-  const first = group();
-  track.appendChild(first);
-  const w = first.offsetWidth;
-  const copies = Math.ceil(1920 / w) + 1;
-  for (let i = 1; i < copies; i++) track.appendChild(group());
-  track.style.setProperty('--shift', `-${w}px`);
-  track.style.animation = `scrollX ${(w / MARQUEE_PX_PER_S).toFixed(2)}s linear infinite`;
+  const items = [];
+  let total = 0, longest = 0, k = 0;
+  while (true) {
+    const [t, c] = MARQUEE[k % MARQUEE.length];
+    const s = document.createElement('span');
+    s.className = 'mq';
+    s.setAttribute('aria-hidden', 'true');
+    s.textContent = t + '  ';
+    if (c === 'white') s.style.color = '#fff';
+    track.appendChild(s);
+    const w = s.offsetWidth;
+    longest = Math.max(longest, w);
+    items.push({ el: s, x: total, w });
+    total += w;
+    k++;
+    if (k % MARQUEE.length === 0 && total >= 1920 + longest) break;
+  }
+  mq = { items, total, t0: performance.now() };
 }
+function tickMarquee(now) {
+  if (mq) {
+    const off = ((now - mq.t0) / 1000 * MARQUEE_PX_PER_S) % mq.total;
+    for (const it of mq.items) {
+      let x = it.x - off;
+      if (x < -it.w) x += mq.total;
+      it.el.style.transform = `translate3d(${x.toFixed(2)}px, 0, 0)`;
+    }
+  }
+  requestAnimationFrame(tickMarquee);
+}
+requestAnimationFrame(tickMarquee);
 
 const start = Math.max(1, Math.min(STATES.length, parseInt(params.get('state') || '1', 10))) - 1;
 if (params.get('bottom') === 'text' || params.get('bottom') === 'gif') BOTTOM = params.get('bottom');
@@ -329,10 +345,13 @@ function applyBottom() {
   const marquee = document.getElementById('marquee');
   marquee.style.display = gif ? 'none' : 'block';
   strip.style.bottom = marquee.style.bottom = SAFE_BOTTOM + 'px';
-  // centre the text block in the space above whichever strip is showing
-  document.getElementById('row').style.top = ((1080 - SAFE_BOTTOM - (gif ? 210 : 48)) / 2 - TEXT_LIFT) + 'px';
+  document.getElementById('row').style.top = BLOCK_CENTRE_Y + 'px';
 }
 applyBottom();
+
+// ?bg=FF1F7A tries another pink on the screen without changing the file
+const bgParam = params.get('bg');
+if (bgParam && /^[0-9a-fA-F]{6}$/.test(bgParam)) document.documentElement.style.setProperty('--bg', '#' + bgParam);
 
 // Self-update: reload when a newer version is published (skipped when opened as a local file)
 if (location.protocol.startsWith('http')) {
@@ -346,14 +365,19 @@ if (location.protocol.startsWith('http')) {
       .catch(() => {});
   }, 60000);
 }
-// Load both Areal styles before anything is measured or typed (gives up after 4 s)
+// Load both Areal styles before anything is measured or typed (gives up after 10 s)
 const fontsReady = document.fonts
   ? Promise.race([
       Promise.all([document.fonts.load('500 42px Areal'), document.fonts.load('italic 500 42px Areal')]),
-      new Promise(r => setTimeout(r, 4000))
+      new Promise(r => setTimeout(r, 10000))
     ]).catch(() => {})
   : Promise.resolve();
-fontsReady.then(() => { if (BOTTOM === 'text') buildMarquee(); go(start, true); });
+fontsReady.then(() => {
+  if (BOTTOM === 'text') buildMarquee();
+  go(start, true);
+  // if the font only arrives later, re-measure the marquee so its loop stays seamless
+  if (document.fonts) document.fonts.addEventListener('loadingdone', () => { if (BOTTOM === 'text') buildMarquee(); });
+});
 </script>
 </body>
 </html>
