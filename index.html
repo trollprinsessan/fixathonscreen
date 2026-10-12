@@ -41,11 +41,10 @@
     transform: translate(-50%, -50%) scale(var(--scale, 1));
   }
 
-  /* Label + text, vertically centred. Label sits on the text's first baseline,
-     so it travels when the text block changes height. */
+  /* Label + text. Top edge fixed (ROW_TOP in the script), so FIXATHON and the
+     first line keep the same height on screen in every state. */
   .row {
-    position: absolute; left: 320px; top: 520px;   /* FIXATHON at x = 320; top = vertical centre of the block (set in the script) */
-    transform: translateY(-50%);
+    position: absolute; left: 320px; top: 187px;   /* FIXATHON at x = 320 */
     display: flex; align-items: baseline;
   }
   .left { width: 524px; }     /* text column starts at x = 844 */
@@ -133,14 +132,14 @@ const SAFE_BOTTOM = 32;
 const GRID_LEFT = 320;
 const LOCKUP_GAP = 60;
 
-/* Vertical centre of the FIXATHON + text block on the 1080px-tall screen.
-   Higher number = lower on screen. */
-const BLOCK_CENTRE_Y = 520;
+/* Top edge of FIXATHON + text, the same in every state (FIXATHON never moves up
+   or down). 187 keeps the tallest state centred. Higher number = lower on screen. */
+const ROW_TOP = 187;
 
 /* Version of this page. The screen checks version.txt every minute and reloads
    itself when it changes, so updates reach it without anyone touching it.
    Change BUILD and version.txt together. */
-const BUILD = '2026-10-12c';
+const BUILD = '2026-10-12d';
 
 /* Bottom edge: 'gif' = fixers.gif strip, 'text' = the marquee below.
    Compare quickly with ?bottom=text or ?bottom=gif in the address. */
@@ -299,7 +298,8 @@ async function show(i, first) {
   const dx = (before.left - after.left) / scale;
   const dy = (before.top - after.top) / scale;
 
-  // Into the sign-off: down, then slide in. Out of it: slide back, then up. Never diagonal.
+  // FIXATHON only ever slides sideways (into and out of the sign-off). The L-shaped
+  // branch below only runs if ROW_TOP is ever made state-dependent again.
   if (!first && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5)) {
     const T = (x, y) => ({ transform: `translate(${x}px, ${y}px)`, easing: TRAVEL_EASE });
     let frames, dur;
@@ -391,7 +391,7 @@ function applyBottom() {
   const marquee = document.getElementById('marquee');
   marquee.style.display = gif ? 'none' : 'block';
   strip.style.bottom = marquee.style.bottom = SAFE_BOTTOM + 'px';
-  document.getElementById('row').style.top = BLOCK_CENTRE_Y + 'px';
+  document.getElementById('row').style.top = ROW_TOP + 'px';
 }
 applyBottom();
 
